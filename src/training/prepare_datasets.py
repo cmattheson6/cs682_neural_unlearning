@@ -5,7 +5,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from copy import deepcopy
 
 
-def onehot_preprocess_data(X: pd.DataFrame):
+def onehot_preprocess_data(X: pd.DataFrame) -> pd.DataFrame:
     schema = X.dtypes.reset_index()
 
     raw_X = deepcopy(X)
@@ -28,7 +28,7 @@ class BaseClassifierDataset(Dataset):
         self.y = y
 
     def __len__(self):
-        return len(self.X)
+        return self.X.shape[0]
 
     def __getitem__(self, idx):
 
