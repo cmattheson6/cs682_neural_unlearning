@@ -89,13 +89,11 @@ class ClusteredUnlearning(BaseUnlearningFilter):
         ordinal_colnames = [col[0] for col in schema.values if col[1] == 'object']
         print(f'ordinal colnames: {ordinal_colnames}')
         results = pd.get_dummies(raw_X, columns=ordinal_colnames)
-        print(results[0:10])
 
         X_encoded = results
 
         # clean nulls
         X_encoded = X_encoded.fillna(-1)
-        print(X_encoded)
 
         return X_encoded
 
