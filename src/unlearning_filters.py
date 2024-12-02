@@ -152,4 +152,3 @@ class ClusteredUnlearning(BaseUnlearningFilter):
         X = X.loc[idxs]
 
         return X
-
