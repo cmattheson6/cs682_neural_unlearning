@@ -28,13 +28,14 @@ class DifferentiallyPrivateActivation(torch.autograd.Function):
         """
 
         grad_input = grad_output.clone()
-        C = 1
-        sigma = 1
+        # TODO: need to figure out how to properly set these somewhere based on each NN
+        C = 4
+        sigma = 4
 
         # calculate the norm of the gradient and divide the gradient by the norm
         grad_norm = torch.linalg.norm(grad_output, dim=1) / C
         grad_norm = f.threshold(grad_norm * -1, threshold=-1, value=-1) * -1
-        grad_input = grad_input / grad_norm
+        grad_input = (grad_input.t() / grad_norm).t()
         # add noise with normal distribution
         noise = torch.zeros_like(grad_input)
         noise = torch.nn.init.normal_(noise, mean=0, std=(C * sigma) ** 2)
@@ -43,7 +44,7 @@ class DifferentiallyPrivateActivation(torch.autograd.Function):
         noise = noise / batch_size
         grad_input += noise
 
-        return grad_input
+        return grad_output
 
 
 def apply_differential_privacy(x):
@@ -53,7 +54,7 @@ def apply_differential_privacy(x):
     return result
 
 
-class TwoLayerFC(nn.Module):
+class DiffPrivacyTwoLayerFC(nn.Module):
 
     def __init__(self, input_size, hidden_size, num_classes):
 

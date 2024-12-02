@@ -30,13 +30,12 @@ def import_crime_data():
         'juv_other_count',
         'priors_count',
         'days_b_screening_arrest',
-        'c_jail_in',
-        'c_jail_out',
         'c_charge_degree',
         'c_charge_desc',
         'is_recid',
         'type_of_assessment',
-        'score_text']]
+        'score_text'
+    ]]
 
     crime_filtered = crime_filtered[
         (crime_df['days_b_screening_arrest'] <= 30)
