@@ -8,9 +8,6 @@ from sklearn.cluster import KMeans
 from copy import deepcopy
 
 
-# TODO: I need to only remove from the positive results as well
-
-
 class BaseUnlearningFilter:
 
     def identify_target_indexes(self, X: pd.DataFrame, pct_remove: float, **kwargs) -> List[int]:
@@ -20,13 +17,6 @@ class BaseUnlearningFilter:
         """
 
         raise ValueError(f'Function {self.identify_target_indexes.__name__} needs to be defined in child classes')
-
-    def prepare_dataset(self, X: pd.DataFrame, pct_remove: float, **kwargs) -> pd.DataFrame:
-
-        idxs = self.identify_target_indexes(X, pct_remove=pct_remove, **kwargs)
-        X = X.loc[idxs]
-
-        return X
 
 
 class UniformUnlearning(BaseUnlearningFilter):
@@ -38,7 +28,7 @@ class UniformUnlearning(BaseUnlearningFilter):
         """
 
         idx_filter = ShuffleSplit(n_splits=1, train_size=1 - pct_remove, test_size=pct_remove)
-        train_idxs, test_idxs = idx_filter.split(X)[0]
+        train_idxs, test_idxs = list(idx_filter.split(X))[0]
 
         return train_idxs
 
@@ -50,34 +40,26 @@ class AdversarialUnlearning(BaseUnlearningFilter):
         return a list of row numbers that should be filtered out
         """
 
+        assert 'colname' in kwargs.keys()
         num_records = X.shape[0]
         group_sizes_to_filter = 0.2  # aggregate percent of the smallest groups to filter
         group_threshold = num_records * group_sizes_to_filter
         colname: str = kwargs.get('colname')
-        groups_lst = X.groupby([colname]).count().sort_values('val', ascending=True).reset_index().to_numpy().tolist()
+        groups_lst = X.groupby(colname).size().sort_values(ascending=False)
 
-        underrepresented_groups = list()
-        underrepresented_count = 0
-        for group_name, group_size in groups_lst:
+        underrepresented_groups = list(groups_lst.index)
+        underrepresented_count = X.shape[0]
+        for i in range(len(underrepresented_groups)):
             if underrepresented_count > group_threshold:
-                break
+                underrepresented_groups.pop(0)
+                underrepresented_count -= groups_lst.values[i]
 
-            underrepresented_count += group_size
-            underrepresented_groups.append(group_name)
-
-        grouped_X = X[X[colname] in underrepresented_groups]
+        grouped_X = X[X[colname].isin(underrepresented_groups)]
+        other_X = X[~(X[colname].isin(underrepresented_groups))]
         idx_filter = StratifiedShuffleSplit(n_splits=1, train_size=1-pct_remove, test_size=pct_remove)
-        train_idxs, test_idxs = idx_filter.split(grouped_X, y=[grouped_X[colname]])[0]
+        train_idxs, test_idxs = list(idx_filter.split(grouped_X, y=grouped_X[colname]))[0]
 
-        return train_idxs
-
-    def prepare_dataset(self, X: pd.DataFrame, pct_remove: float, **kwargs) -> pd.DataFrame:
-
-        assert 'colname' in kwargs.keys()
-        idxs = self.identify_target_indexes(X, pct_remove=pct_remove, **kwargs)
-        X = X.loc[idxs]
-
-        return X
+        return list(train_idxs) + list(other_X.index)
 
 
 class ClusteredUnlearning(BaseUnlearningFilter):
@@ -120,35 +102,27 @@ class ClusteredUnlearning(BaseUnlearningFilter):
         return a list of row numbers that should be filtered out
         """
 
+        assert 'colname' in kwargs.keys()
+        num_clusters = kwargs.get('num_clusters', 5)
+        group_colname = 'group_label'
+        X = self.append_cluster_group_label(X, group_colname=group_colname, num_clusters=num_clusters)
+
         num_records = X.shape[0]
         group_sizes_to_filter = 0.2  # aggregate percent of the smallest groups to filter
         group_threshold = num_records * group_sizes_to_filter
         colname: str = kwargs.get('colname')
-        groups_lst = X.groupby([colname]).count().sort_values('val', ascending=True).reset_index().to_numpy().tolist()
+        groups_lst = X.groupby(colname).size().sort_values(ascending=False)
 
-        underrepresented_groups = list()
-        underrepresented_count = 0
-        for group_name, group_size in groups_lst:
+        underrepresented_groups = list(groups_lst.index)
+        underrepresented_count = X.shape[0]
+        for i in range(len(underrepresented_groups)):
             if underrepresented_count > group_threshold:
-                break
+                underrepresented_groups.pop(0)
+                underrepresented_count -= groups_lst.values[i]
 
-            underrepresented_count += group_size
-            underrepresented_groups.append(group_name)
-
-        grouped_X = X[X[colname] in underrepresented_groups]
+        grouped_X = X[X[colname].isin(underrepresented_groups)]
+        other_X = X[~(X[colname].isin(underrepresented_groups))]
         idx_filter = StratifiedShuffleSplit(n_splits=1, train_size=1-pct_remove, test_size=pct_remove)
-        train_idxs, test_idxs = idx_filter.split(grouped_X, y=[grouped_X[colname]])[0]
+        train_idxs, test_idxs = list(idx_filter.split(grouped_X, y=grouped_X[colname]))[0]
 
-        return train_idxs
-
-    def prepare_dataset(self, X: pd.DataFrame, pct_remove: float, **kwargs) -> pd.DataFrame:
-
-        assert 'num_clusters' in kwargs.keys()
-        assert 'colname' in kwargs.keys()
-        num_clusters = kwargs.get('num_clusters')
-        group_colname = 'group_label'
-        X = self.append_cluster_group_label(X, group_colname=group_colname, num_clusters=num_clusters)
-        idxs = self.identify_target_indexes(X, pct_remove=pct_remove, colname=group_colname, **kwargs)
-        X = X.loc[idxs]
-
-        return X
+        return list(train_idxs) + list(other_X.index)

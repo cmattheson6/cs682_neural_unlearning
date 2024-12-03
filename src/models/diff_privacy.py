@@ -54,22 +54,28 @@ def apply_differential_privacy(x):
     return result
 
 
-class DiffPrivacyTwoLayerFC(nn.Module):
+class DiffPrivacyFC(nn.Module):
 
-    def __init__(self, input_size, hidden_size, num_classes):
+    def __init__(self, input_size, num_classes):
 
         super().__init__()
+        h1_size = 30
+        h2_size = 20
 
-        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc1 = nn.Linear(input_size, h1_size)
         nn.init.kaiming_normal_(self.fc1.weight)
 
-        self.fc2 = nn.Linear(hidden_size, num_classes)
+        self.fc2 = nn.Linear(h1_size, h2_size)
+        nn.init.kaiming_normal_(self.fc2.weight)
+
+        self.fc3 = nn.Linear(h2_size, num_classes)
         nn.init.kaiming_normal_(self.fc2.weight)
 
     def forward(self, x):
 
-        # normal two-layer function that adds differential privacy into the backwards pass
+        # normal three-layer function that adds differential privacy into the backwards pass
         h1 = f.relu(apply_differential_privacy(self.fc1(x)))
-        scores = apply_differential_privacy(self.fc2(h1))
+        h2 = f.relu(apply_differential_privacy(self.fc2(h1)))
+        scores = apply_differential_privacy(self.fc3(h2))
 
         return scores

@@ -9,7 +9,9 @@ def import_census_data() -> [pd.DataFrame, pd.DataFrame]:
     # fetch dataset
     result = fetch_ucirepo(id=2)
     X = result.data.features
+    X.reset_index()
     y = result.data.targets
+    y.reset_index()
 
     return X, y
 
@@ -44,6 +46,7 @@ def import_crime_data():
         & (crime_df['c_charge_degree'] != "O")
         & (crime_df['score_text'] != 'N/A')
         ]
+    crime_filtered = crime_filtered.reset_index(drop=True)
 
     X = crime_filtered.drop(['is_recid'], axis=1)
     y = crime_filtered['is_recid']

@@ -1,7 +1,7 @@
 
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit, ShuffleSplit
 from copy import deepcopy
 from torch import optim
 import torch
@@ -26,7 +26,7 @@ def onehot_preprocess_data(X: pd.DataFrame) -> pd.DataFrame:
 class BaseClassifierDataset(Dataset):
 
     def __init__(self, X: pd.DataFrame, y: pd.DataFrame):
-        self.X = onehot_preprocess_data(X)
+        self.X = X
         self.y = y.to_numpy()
         self.shape = self.X.shape
 
@@ -41,53 +41,63 @@ class BaseClassifierDataset(Dataset):
         return values, label
 
 
-def prepare_sampled_datasets(X: pd.DataFrame, y: pd.DataFrame, group_colname: str):
+def prepare_sampled_datasets(X: pd.DataFrame, y: pd.DataFrame):
 
     train_pct = 0.8
-    validation_pct = 0.1
-    test_pct = 0.1
+    validation_pct = 0.2
 
-    idx_filter = StratifiedShuffleSplit(n_splits=1, train_size=1 - test_pct, test_size=test_pct)
-    train_val_idxs, test_idxs = list(idx_filter.split(X, y=X[group_colname]))[0]
-    test_X = X.iloc[test_idxs, :]
-    test_y = y.iloc[test_idxs]
-    test_ds = BaseClassifierDataset(test_X, test_y)
-
-    train_val_X = X.iloc[train_val_idxs, :]
-    tran_val_y = y.iloc[train_val_idxs]
-    idx_filter = StratifiedShuffleSplit(
+    X = onehot_preprocess_data(X)
+    idx_filter = ShuffleSplit(
         n_splits=1,
         train_size=train_pct/(train_pct+validation_pct),
         test_size=validation_pct/(train_pct+validation_pct)
     )
-    train_idxs, val_idxs = list(idx_filter.split(train_val_X, y=train_val_X[group_colname]))[0]
-    train_X = train_val_X.iloc[train_idxs, :]
-    train_y = tran_val_y.iloc[train_idxs]
+    train_idxs, val_idxs = list(idx_filter.split(X))[0]
+
+    train_X = X.iloc[train_idxs, :]
+    train_y = y.iloc[train_idxs]
     train_ds = BaseClassifierDataset(train_X, train_y)
-    val_X = train_val_X.iloc[val_idxs, :]
-    val_y = tran_val_y.iloc[val_idxs]
+
+    val_X = X.iloc[val_idxs, :]
+    val_y = y.iloc[val_idxs]
     val_ds = BaseClassifierDataset(val_X, val_y)
 
-    return train_ds, val_ds, test_ds
+    return train_ds, val_ds
 
 
 # TODO: remove before submission
-if __name__ == '__main__':
-    from src.importers import import_crime_data
-    from src.models.diff_privacy import DiffPrivacyTwoLayerFC
-    from src.training.run_training import train
+# if __name__ == '__main__':
+#
+#     from src.training.run_training import run_model_permutation
+#     run_model_permutation()
 
-    crime_X, crime_y = import_crime_data()
-    train_ds, val_ds, test_ds = prepare_sampled_datasets(crime_X, crime_y, 'race')
+    # from src.importers import import_crime_data
+    # from src.models.diff_privacy import DiffPrivacyFC
+    # from src.training.run_training import train
+    # from src.fairness_metrcs import find_max_disparate_impact
+    #
+    # crime_X, crime_y = import_crime_data()
+    # train_ds, val_ds = prepare_sampled_datasets(crime_X, crime_y, 'race')
+    #
+    # train_loader = DataLoader(train_ds, batch_size=64, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
+    # test_loader = DataLoader(val_ds, batch_size=64, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
+    # model = DiffPrivacyFC(input_size=train_ds.shape[1], num_classes=2)
+    # optimizer = optim.Adam(model.parameters(), lr=5e-3, weight_decay=1e-6)
+    # train(
+    #     model=model,
+    #     data_loader=train_loader,
+    #     train_optimizer=optimizer,
+    #     num_epochs=1,
+    #     device='cuda'
+    # )
+    # # eval run
+    # unlabelled_data, predicted_values = train(
+    #     model=model,
+    #     data_loader=test_loader,
+    #     train_optimizer=None,
+    #     num_epochs=1,
+    #     device='cuda'
+    # )
+    # val_data = pd.DataFrame(unlabelled_data.numpy(), columns=train_ds.X.columns)
+    # disp_impact = find_max_disparate_impact(val_data, predicted_values, colname='race')
 
-    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
-    model = DiffPrivacyTwoLayerFC(input_size=train_ds.shape[1], hidden_size=30, num_classes=2)
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
-    train(
-        model=model,
-        data_loader=train_loader,
-        train_optimizer=optimizer,
-        epoch=1,
-        epochs=1,
-        device='cuda'
-    )
